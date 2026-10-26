@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+release/
+*.exe
+*.pt
+.venv/
+.buildenv/
+.idea/
+.claude/
+# subject data never goes here; only coil maps and atlases are tracked
+*.dcm
+*.ima
+!cpp_bet/*.pyd
+!test_dic/**/*.dcm

@@ -1,0 +1,508 @@
+{
+  "_what": "Frozen numerical definitions and implementation for the linear-encoding feasibility simulator.",
+  "_status": "IDEALIZED OFFLINE SIMULATION. Research module. Not wired into any production shim path, no serial port, no upload.",
+  "_scope": "What is frozen is the mathematics and the code. It is not a general hardware capability claim: every number depends on the field maps hashed below, the region, the current bounds and both tolerances.",
+  "objective": {
+    "maximise": "beta_actual = d^T G i",
+    "note": "The delivered gradient along d. There is no independent nominal beta and none may be reintroduced: an earlier version maximised a free beta against a relative fit error, which rewarded plain under-delivery -- a field of 1200 Hz/m sits within 10% of a 1333 Hz/m target -- and could prefer a solution delivering 900 at gain 0.7 over one delivering 1000 at gain 1.0.",
+    "constraints": [
+      "d^T G i >= 0",
+      "||(I - d d^T) G i||_2 <= tan(theta_max) * d^T G i",
+      "sqrt(mean_W[(R i)^2]) <= epsilon_nonlinear * (d^T G i) * sigma_position",
+      "lower_j <= i_j <= upper_j"
+    ],
+    "sigma_position": "sqrt(mean_W[(d^T (r - r0))^2]), metres",
+    "reduction": "Q = R^T W R / sum(W), Cholesky Q = L^T L, so the residual constraint is ||L i|| <= eps * beta * sigma. The million-row design never reaches CVXPY."
+  },
+  "decomposition": {
+    "basis": "X = [1, x-x0, y-y0, z-z0] on the ROI, about its weighted centre",
+    "per_channel": "B_j = X M_j + R_j",
+    "constant_hz_per_a": "M[0]  -- reported, never counted as encoding",
+    "G_hz_per_m_per_a": "M[1:4]  -- the linear part",
+    "R_hz_per_a": "the nonlinear residual",
+    "why_constant_excluded": "a uniform field advances every spin's phase equally and carries no position information"
+  },
+  "units": {
+    "gamma_hz_per_t": 42577000.0,
+    "gamma_hz_per_mt": 42577.0,
+    "conversion": "G[mT/m] = G[Hz/m] / 42577",
+    "single_entry_point": "core.linear_encoding_metrics.to_mt_per_m",
+    "field_maps": "Hz/A",
+    "field_unit_status": "user_confirmed",
+    "time": "s",
+    "current": "A",
+    "field": "Hz",
+    "gradient": "Hz/m",
+    "phase": "rad",
+    "k": "cycles/m"
+  },
+  "coordinates": {
+    "frame": "NIfTI RAS+ world, metres",
+    "x": "right(+) / left(-)",
+    "y": "anterior(+) / posterior(-)",
+    "z": "superior(+) / inferior(-)",
+    "source": "affine only; array axes are never used as directions",
+    "scanner_frame": "NOT AVAILABLE. PatientPosition and PhaseEncodingDirection are not read anywhere in this project, so RAS-Y must not be presented as the scanner phase-encoding direction."
+  },
+  "tolerances": {
+    "theta_max_deg": {
+      "meaning": "half angle of the cone on the gradient direction",
+      "required": true,
+      "note": "Not optional. With only a nonlinearity budget the optimum tilts hard -- 74 degrees with an orthogonal leakage 3.5x the parallel component was measured on the 12ch PFC ROI -- because the objective rewards the parallel component and the nonlinearity constraint does not penalise orthogonal linear leakage.",
+      "ui_default_deg": 5.0,
+      "swept": [
+        2.0,
+        5.0,
+        10.0
+      ]
+    },
+    "epsilon_nonlinear": {
+      "meaning": "nonlinear residual RMS divided by (delivered gradient * sigma_position)",
+      "required_in_every_headline": true,
+      "swept": [
+        0.2,
+        0.3,
+        0.4,
+        0.5
+      ]
+    },
+    "current_limit_a": 3.0,
+    "dynamic_bounds": {
+      "symmetric_bipolar": "|i_j| <= Imax - |i_static_j|",
+      "asymmetric_unipolar": "[-Imax - i_static, Imax - i_static]",
+      "note": "the symmetric form is the default and is what a sinusoid needs; the asymmetric window suits a single-sign blip and then the waveform must still be checked sample by sample"
+    },
+    "post_solve_clipping": false,
+    "clipping_note": "never available. Out of bounds is answered by reject (default) or one uniform scale factor.",
+    "coverage_threshold": 0.95,
+    "coverage_rule": "coverage = valid sphere voxels / theoretical sphere voxels; below the threshold the region is named 'sphere and valid support', is shown as TRUNCATED, and no maximum-capability conclusion may be drawn from it"
+  },
+  "solver": {
+    "backend": [
+      "CLARABEL",
+      "SCS (fallback)"
+    ],
+    "form": "SOCP, linear objective, second-order cones",
+    "violations_measured_on_the_returned_vector": true,
+    "reported_violations": [
+      "box_violation_a",
+      "nonlinear_constraint_relative_violation",
+      "direction_cone_relative_violation"
+    ],
+    "monotonicity_tolerance_relative": 0.0001
+  },
+  "primary_metrics": [
+    "gradient_parallel_actual_hz_per_m",
+    "gradient_parallel_actual_mt_per_m",
+    "gradient_magnitude_actual_hz_per_m",
+    "direction_error_deg",
+    "orthogonal_leakage_ratio",
+    "nonlinear_residual_ratio",
+    "nonlinear_residual_rms_hz"
+  ],
+  "secondary_metrics": {
+    "target_fit_nrmse": "||B_centered i - beta_actual t|| / ||beta_actual t||; mixes orthogonal linear leakage with nonlinear residual and must not be used alone"
+  },
+  "legacy_debug_only": [
+    "_legacy_requested_beta_hz_per_m"
+  ],
+  "waveforms": [
+    "sine",
+    "cosine",
+    "triangle",
+    "trapezoid",
+    "square",
+    "piecewise_linear",
+    "custom_csv"
+  ],
+  "verification": {
+    "synthetic": {
+      "perfect_linear_coil": "3 A x 400 Hz/m/A delivers 1200.00 Hz/m at epsilon 0.10, 0.30 and 0.50 alike; relaxing epsilon adds no gradient",
+      "adversarial": "the SOCP matches an exhaustive 25x25 grid search over the feasible box and never falls below the clean single-channel solution",
+      "exact_recovery": "an exact X-gradient channel is recovered to 1e-9",
+      "collinear_detection": "4 collinear channels give effective rank 1",
+      "homogeneity": "doubling Imax doubles the gradient, ratios unchanged"
+    },
+    "monotonicity": {
+      "epsilon": "6 rungs, largest relative drop 4.6e-12",
+      "theta": "6 rungs, largest relative drop 0.0",
+      "tolerance": 0.0001
+    },
+    "memory": "no (Nx, Ny, Nz, Nt) array is allocated; a 1.9 GB 4-D field peaks at 1.9 MB via B(r,t) = C(r,:) i(t)",
+    "tests": [
+      "test_linear_encoding_waveform.py",
+      "test_linear_encoding_model.py",
+      "test_linear_encoding_constraints.py",
+      "test_linear_encoding_pareto.py"
+    ],
+    "production_smoke": "9/9"
+  },
+  "verified_ranges": {
+    "_note": "Belongs to the hashed field maps, not to the arrays in general. No diameter is hard-coded anywhere; the UI recomputes coverage from whatever maps are loaded.",
+    "12ch PFC": {
+      "real_PFC_ROI": "verified (ROI already on the coil grid)",
+      "DSV_4cm_energy_centred": "verified, coverage 100%",
+      "DSV_8cm_energy_centred": "verified, coverage 98%"
+    },
+    "36ch whole-brain": {
+      "DSV_8cm_isocentre": "verified, coverage 100%",
+      "DSV_12cm_isocentre": "verified, coverage 99.9%",
+      "DSV_20cm_isocentre": "NOT VERIFIED, coverage 46% -- TRUNCATED, excluded from conclusions"
+    }
+  },
+  "unknown_hardware": {
+    "resistance_ohm": "unknown",
+    "inductance_h": "unknown",
+    "mutual_inductance_h": "unknown",
+    "voltage_limit_v": "unknown",
+    "amplifier_bandwidth": "unknown",
+    "transfer_function_hf": "unknown",
+    "scanner_adc_synchronisation": "unknown / trigger line not connected",
+    "gradient_coupling": "not_characterized",
+    "consequence": "voltage, power and dynamic realisability are reported as unknown, never as zero"
+  },
+  "does_not_demonstrate": [
+    "MRI acceleration of any factor",
+    "that RF centre-encoding is solved",
+    "that MB-EPI is usable",
+    "that any amplifier can follow these waveforms",
+    "any improvement in parallel-imaging conditioning"
+  ],
+  "field_map_identity": [
+    {
+      "coil": "PFC 12ch",
+      "n_channels": 12,
+      "current_limit_a": 3.0,
+      "field_unit": "Hz/A",
+      "field_unit_status": "user_confirmed",
+      "channel_order": [
+        "ch1_nii",
+        "ch2_nii",
+        "ch3_nii",
+        "ch4_nii",
+        "ch5_nii",
+        "ch6_nii",
+        "ch7_nii",
+        "ch8_nii",
+        "ch9_nii",
+        "ch10_nii",
+        "ch11_nii",
+        "ch12_nii"
+      ],
+      "fieldmap_set_sha256": "319cdcf30ddc2116c91860cce606b0ca142585fcd3a151e4b118700ab3913381",
+      "per_channel": [
+        {
+          "channel": "ch1_nii",
+          "file": "ch1_nii_deltaFieldmap.nii.gz",
+          "sha256": "a83df3f08ad3db23"
+        },
+        {
+          "channel": "ch2_nii",
+          "file": "ch2_nii_deltaFieldmap.nii.gz",
+          "sha256": "803ca32fbac44df2"
+        },
+        {
+          "channel": "ch3_nii",
+          "file": "ch3_nii_deltaFieldmap.nii.gz",
+          "sha256": "f22f2fece7d7d072"
+        },
+        {
+          "channel": "ch4_nii",
+          "file": "ch4_nii_deltaFieldmap.nii.gz",
+          "sha256": "bbfef5444792c0c1"
+        },
+        {
+          "channel": "ch5_nii",
+          "file": "ch5_nii_deltaFieldmap.nii.gz",
+          "sha256": "d10fd380a2598fd6"
+        },
+        {
+          "channel": "ch6_nii",
+          "file": "ch6_nii_deltaFieldmap.nii.gz",
+          "sha256": "4daafdb9c3f184be"
+        },
+        {
+          "channel": "ch7_nii",
+          "file": "ch7_nii_deltaFieldmap.nii.gz",
+          "sha256": "9e6efb2bc0c4a773"
+        },
+        {
+          "channel": "ch8_nii",
+          "file": "ch8_nii_deltaFieldmap.nii.gz",
+          "sha256": "fc1d6632babd58e8"
+        },
+        {
+          "channel": "ch9_nii",
+          "file": "ch9_nii_deltaFieldmap.nii.gz",
+          "sha256": "38a2b7c04fee9376"
+        },
+        {
+          "channel": "ch10_nii",
+          "file": "ch10_nii_deltaFieldmap.nii.gz",
+          "sha256": "8a881a1cc6a74823"
+        },
+        {
+          "channel": "ch11_nii",
+          "file": "ch11_nii_deltaFieldmap.nii.gz",
+          "sha256": "3070eee05419e4d1"
+        },
+        {
+          "channel": "ch12_nii",
+          "file": "ch12_nii_deltaFieldmap.nii.gz",
+          "sha256": "c23e44056d159a71"
+        }
+      ]
+    },
+    {
+      "coil": "36通道婴幼儿线圈_xiamen扫描",
+      "n_channels": 36,
+      "current_limit_a": 3.0,
+      "field_unit": "Hz/A",
+      "field_unit_status": "user_confirmed",
+      "channel_order": [
+        "ch1_nii",
+        "ch2_nii",
+        "ch3_nii",
+        "ch4_nii",
+        "ch5_nii",
+        "ch6_nii",
+        "ch7_nii",
+        "ch8_nii",
+        "ch9_nii",
+        "ch10_nii",
+        "ch11_nii",
+        "ch12_nii",
+        "ch13_nii",
+        "ch14_nii",
+        "ch15_nii",
+        "ch16_nii",
+        "ch17_nii",
+        "ch18_nii",
+        "ch19_nii",
+        "ch20_nii",
+        "ch21_nii",
+        "ch22_nii",
+        "ch23_nii",
+        "ch24_nii",
+        "ch25_nii",
+        "ch26_nii",
+        "ch27_nii",
+        "ch28_nii",
+        "ch29_nii",
+        "ch30_nii",
+        "ch31_nii",
+        "ch32_nii",
+        "ch33_nii",
+        "ch34_nii",
+        "ch35_nii",
+        "ch36_nii"
+      ],
+      "fieldmap_set_sha256": "b37bd84cfb208b315d2cccbd89ae6e9cecccd57809657d4e481301e65f07bda5",
+      "per_channel": [
+        {
+          "channel": "ch1_nii",
+          "file": "ch1_nii_deltaFieldmap.nii",
+          "sha256": "205d993c435893be"
+        },
+        {
+          "channel": "ch2_nii",
+          "file": "ch2_nii_deltaFieldmap.nii",
+          "sha256": "7e43aee562374547"
+        },
+        {
+          "channel": "ch3_nii",
+          "file": "ch3_nii_deltaFieldmap.nii",
+          "sha256": "96b0a0b7dbe99a77"
+        },
+        {
+          "channel": "ch4_nii",
+          "file": "ch4_nii_deltaFieldmap.nii",
+          "sha256": "1807dd83d5635557"
+        },
+        {
+          "channel": "ch5_nii",
+          "file": "ch5_nii_deltaFieldmap.nii",
+          "sha256": "bda068611d14176f"
+        },
+        {
+          "channel": "ch6_nii",
+          "file": "ch6_nii_deltaFieldmap.nii",
+          "sha256": "c3cdeba2fc46c2a2"
+        },
+        {
+          "channel": "ch7_nii",
+          "file": "ch7_nii_deltaFieldmap.nii",
+          "sha256": "95f4d2a3bcf6d5ca"
+        },
+        {
+          "channel": "ch8_nii",
+          "file": "ch8_nii_deltaFieldmap.nii",
+          "sha256": "20062f5f52e44134"
+        },
+        {
+          "channel": "ch9_nii",
+          "file": "ch9_nii_deltaFieldmap.nii",
+          "sha256": "87967dca248ec2ec"
+        },
+        {
+          "channel": "ch10_nii",
+          "file": "ch10_nii_deltaFieldmap.nii",
+          "sha256": "8cfacb9c03fd6322"
+        },
+        {
+          "channel": "ch11_nii",
+          "file": "ch11_nii_deltaFieldmap.nii",
+          "sha256": "72245ec80239f129"
+        },
+        {
+          "channel": "ch12_nii",
+          "file": "ch12_nii_deltaFieldmap.nii",
+          "sha256": "d88e4a5dcc79bba7"
+        },
+        {
+          "channel": "ch13_nii",
+          "file": "ch13_nii_deltaFieldmap.nii",
+          "sha256": "1ca850bc2e8e1f4f"
+        },
+        {
+          "channel": "ch14_nii",
+          "file": "ch14_nii_deltaFieldmap.nii",
+          "sha256": "142aac85197312a0"
+        },
+        {
+          "channel": "ch15_nii",
+          "file": "ch15_nii_deltaFieldmap.nii",
+          "sha256": "db89a3b2c5116a7d"
+        },
+        {
+          "channel": "ch16_nii",
+          "file": "ch16_nii_deltaFieldmap.nii",
+          "sha256": "f0e8fd23967b4c7a"
+        },
+        {
+          "channel": "ch17_nii",
+          "file": "ch17_nii_deltaFieldmap.nii",
+          "sha256": "cb2b5cd091c56198"
+        },
+        {
+          "channel": "ch18_nii",
+          "file": "ch18_nii_deltaFieldmap.nii",
+          "sha256": "927bcef557b18d87"
+        },
+        {
+          "channel": "ch19_nii",
+          "file": "ch19_nii_deltaFieldmap.nii",
+          "sha256": "5f81365b13dbed92"
+        },
+        {
+          "channel": "ch20_nii",
+          "file": "ch20_nii_deltaFieldmap.nii",
+          "sha256": "bc4e4c5f7a0e9f0e"
+        },
+        {
+          "channel": "ch21_nii",
+          "file": "ch21_nii_deltaFieldmap.nii",
+          "sha256": "1836279fc839adb0"
+        },
+        {
+          "channel": "ch22_nii",
+          "file": "ch22_nii_deltaFieldmap.nii",
+          "sha256": "1110b5b3c92ca549"
+        },
+        {
+          "channel": "ch23_nii",
+          "file": "ch23_nii_deltaFieldmap.nii",
+          "sha256": "e6df457f23d3ec76"
+        },
+        {
+          "channel": "ch24_nii",
+          "file": "ch24_nii_deltaFieldmap.nii",
+          "sha256": "fe5b3f6bc93d7db2"
+        },
+        {
+          "channel": "ch25_nii",
+          "file": "ch25_nii_deltaFieldmap.nii",
+          "sha256": "d4ece058483d1b40"
+        },
+        {
+          "channel": "ch26_nii",
+          "file": "ch26_nii_deltaFieldmap.nii",
+          "sha256": "897d761dc65093e7"
+        },
+        {
+          "channel": "ch27_nii",
+          "file": "ch27_nii_deltaFieldmap.nii",
+          "sha256": "00ec2b3b108d14b5"
+        },
+        {
+          "channel": "ch28_nii",
+          "file": "ch28_nii_deltaFieldmap.nii",
+          "sha256": "bce4e0f677429ad3"
+        },
+        {
+          "channel": "ch29_nii",
+          "file": "ch29_nii_deltaFieldmap.nii",
+          "sha256": "ca6acc714bbeb7d1"
+        },
+        {
+          "channel": "ch30_nii",
+          "file": "ch30_nii_deltaFieldmap.nii",
+          "sha256": "7847fe77a99748e2"
+        },
+        {
+          "channel": "ch31_nii",
+          "file": "ch31_nii_deltaFieldmap.nii",
+          "sha256": "f2688e99406ab989"
+        },
+        {
+          "channel": "ch32_nii",
+          "file": "ch32_nii_deltaFieldmap.nii",
+          "sha256": "995addfe088eea74"
+        },
+        {
+          "channel": "ch33_nii",
+          "file": "ch33_nii_deltaFieldmap.nii",
+          "sha256": "e26d6ce09360c359"
+        },
+        {
+          "channel": "ch34_nii",
+          "file": "ch34_nii_deltaFieldmap.nii",
+          "sha256": "55f5bb152e9001e3"
+        },
+        {
+          "channel": "ch35_nii",
+          "file": "ch35_nii_deltaFieldmap.nii",
+          "sha256": "0b0b7da16bbd8fd8"
+        },
+        {
+          "channel": "ch36_nii",
+          "file": "ch36_nii_deltaFieldmap.nii",
+          "sha256": "01ed1f811976557e"
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "git_commit": null,
+    "git_note": "SHA-256 per file; see CHANGELOG for the tagged build",
+    "file_sha256": {
+      "core/spatial_grid.py": "97545c5816910ce8f1a34e814de407cea25ea16e3f91d98096fcfcce37ddb92a",
+      "core/linear_encoding_waveform.py": "d17be3f48a360cc904e283d3541e02fcda315f2e09f68e447278dafa8b3633e6",
+      "core/linear_encoding_model.py": "11d6fcc5774dbb0b74d9e51e96d9a0d8140073011c7aa31c23479b337212bef4",
+      "core/linear_encoding_metrics.py": "56b8407a9e9e1f115ebe544f5841be82eb46ac30c8475a2d3c6305fff4518709",
+      "core/linear_encoding_pareto.py": "1a9ca792f980cb9c6004346d210e5873ac4a4d09904b743a98fddb5aa525cce1",
+      "tests/test_linear_encoding_waveform.py": "672961a57178c9fb873902ed0821bd414acadd76790e7cc04e001a46e5c21b25",
+      "tests/test_linear_encoding_model.py": "d4e206092260e42683cbf1ab0d2c1ffa176d5c585174e304b791b3dcf6faae9f",
+      "tests/test_linear_encoding_constraints.py": "c26f9ca321838c14557b70759c160f8130a3c0bb70b97f95e0968700950e9b00",
+      "tests/test_linear_encoding_pareto.py": "4bb1d410427ae92343e72dcafcd05d2e133d9114e192a75f2cc17229498123a4",
+      "tools/research/freeze_linear_encoding.py": "8a6a9f5d6982b9876118d7628527164107c3698b23b888374f803a63ad9540c1",
+      "config/shim_delta_bounds.json": "eddc16eeabcb064a7936d4185a468395c154b31ef55cfde9c72724612275990b"
+    },
+    "python": "3.11.9",
+    "numpy": "2.2.6",
+    "moved_paths": {
+      "tests/freeze_linear_encoding.py": "tools/research/freeze_linear_encoding.py"
+    },
+    "cleanup_note": "path-only repository cleanup; numerical definitions and results unchanged. Scripts moved from tests/ to tools/research/ and the recorded SHA-256 updated to the moved files."
+  }
+}

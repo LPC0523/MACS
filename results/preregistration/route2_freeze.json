@@ -1,0 +1,276 @@
+{
+  "_what": "Route 2 pre-registration. Frozen before the test fold is run.",
+  "_status": "research candidate, not an app default",
+  "_qualifier": "Pareto optimality applies only to regional MSE/RMS under the identical feasible set; it does not imply Pareto optimality for CVaR, EPI displacement, signal dropout, or measured EPI image quality.",
+  "_rest_budget_meaning": "A 1% rest-RMS budget bounds one scalar summary of one region. It does not mean the rest of the brain is undamaged in EPI: nothing here measures displacement, dropout or image quality.",
+  "operating_point": {
+    "rest_budget": 0.01,
+    "definition": "minimise PFC RMS subject to rest RMS <= (1 + budget) * rest RMS of the production whole-brain solution, under the identical feasible set",
+    "reference_solution": "core.adaptive_joint.solve_adaptive_joint with uniform weights and lambda_pfc_low=0, i.e. the shipping whole-brain solve",
+    "chosen_on": [
+      "train",
+      "validation"
+    ],
+    "test_run": false,
+    "pareto_points_reported": [
+      0.0,
+      0.0025,
+      0.005,
+      0.01,
+      0.02,
+      0.05
+    ]
+  },
+  "solver": {
+    "candidate": {
+      "form": "epsilon-constraint SOCP on the factored normal form; min ||R_p x + u_p||^2 s.t. ||R_r x + u_r|| <= cap, box on x",
+      "backend": [
+        "CLARABEL",
+        "SCS (fallback)"
+      ],
+      "reduction": "design matrices reduced to their 20x20 Cholesky factor before reaching CVXPY; no million-row matrix is handed to the solver",
+      "cholesky_jitter_start": 1e-14
+    },
+    "reference": {
+      "backend": "scipy L-BFGS-B",
+      "options": {
+        "maxiter": 5000,
+        "ftol": 1e-15,
+        "gtol": 1e-12,
+        "maxls": 60
+      },
+      "weight_kwargs": {
+        "base": 1.0,
+        "alpha": 0.0,
+        "top_fraction": 0.0
+      },
+      "lambda_pfc_low": 0.0,
+      "_note": "alpha = 0 and top_fraction = 0 means uniform voxel weights: the reference is the plain whole-brain mean-square solve, with no adaptive weighting"
+    },
+    "tolerances_hz": {
+      "guard_tol": 0.001,
+      "pareto_selfcheck_tol": 0.001,
+      "box_tol": 1e-06
+    },
+    "post_solve_clipping": false,
+    "_clipping_note": "a solution violating its constraints raises GuardViolation; it is never clipped"
+  },
+  "masks": {
+    "brain": "*_bet_mask.nii.gz > 0.5",
+    "pfc": "*_pfc_mask.nii.gz, else roi_cache/pfc_native.nii.gz, > 0.5, intersected with brain",
+    "rest": "brain & ~pfc, strictly disjoint from pfc; air excluded",
+    "field": "*_deltaB0_hertz.nii.gz, Hz"
+  },
+  "exclusions": {
+    "rule": "in-brain std < 10.0 Hz",
+    "reason": "radian-scale phase written into a file named hertz; values reach 0.997 x 3*pi and are identical between two different participants",
+    "scans": [
+      {
+        "scan": "S22_ear",
+        "brain_std_hz": 3.494,
+        "max_abs_hz": 9.398
+      },
+      {
+        "scan": "S22",
+        "brain_std_hz": 3.243,
+        "max_abs_hz": 9.398
+      },
+      {
+        "scan": "S24_ear",
+        "brain_std_hz": 4.081,
+        "max_abs_hz": 9.398
+      },
+      {
+        "scan": "S24",
+        "brain_std_hz": 3.939,
+        "max_abs_hz": 9.398
+      }
+    ]
+  },
+  "split": {
+    "seed": 20260805,
+    "nominal_target_scans": [
+      22,
+      11,
+      11
+    ],
+    "grouping": "by participant, not by scan: repeat sessions and the with/without-earshim pairs share anatomy",
+    "scans_found": 44,
+    "scans_audited": 40,
+    "counts": {
+      "train": 20,
+      "validation": 10,
+      "test": 10
+    },
+    "assignment": {
+      "S01": "train",
+      "S02": "train",
+      "S03": "train",
+      "S04": "test",
+      "S05": "validation",
+      "S06": "validation",
+      "S07": "validation",
+      "S08": "train",
+      "S09": "test",
+      "S10": "validation",
+      "S11": "validation",
+      "S12": "train",
+      "S13_OPT": "train",
+      "S13_Ref": "train",
+      "S13_TMS": "train",
+      "S14": "train",
+      "S15": "validation",
+      "S15_TMS": "validation",
+      "S16": "test",
+      "S17": "test",
+      "S18": "test",
+      "S19": "test",
+      "S20": "train",
+      "S20_ear": "train",
+      "S21": "train",
+      "S21_ear": "train",
+      "S99": "test",
+      "S23": "test",
+      "S23_ear": "test",
+      "S25": "train",
+      "S26": "validation",
+      "S27": "validation",
+      "S27_ear": "validation",
+      "S28": "train",
+      "S28_ear": "train",
+      "S29": "train",
+      "S29_ear": "train",
+      "S30": "train",
+      "S30_ear": "train",
+      "S99_ear": "test"
+    }
+  },
+  "bounds": {
+    "coil": "PFC 12ch",
+    "current_limit_a": 3.0,
+    "scanner_terms": [
+      "A10",
+      "A11",
+      "B11",
+      "A20",
+      "A21",
+      "B21",
+      "A22",
+      "B22"
+    ],
+    "delta_envelope": 2000.0,
+    "absolute_envelope": 2000.0,
+    "rule": "per-term intersection: lo = max(-delta, -abs - baseline), hi = min(+delta, +abs - baseline); asymmetric whenever the baseline is non-zero",
+    "baseline_used": {
+      "A10": 0.0,
+      "A11": 0.0,
+      "B11": 0.0,
+      "A20": 0.0,
+      "A21": 0.0,
+      "B21": 0.0,
+      "A22": 0.0,
+      "B22": 0.0
+    },
+    "window_used": {
+      "A10": [
+        -2000.0,
+        2000.0
+      ],
+      "A11": [
+        -2000.0,
+        2000.0
+      ],
+      "B11": [
+        -2000.0,
+        2000.0
+      ],
+      "A20": [
+        -2000.0,
+        2000.0
+      ],
+      "A21": [
+        -2000.0,
+        2000.0
+      ],
+      "B21": [
+        -2000.0,
+        2000.0
+      ],
+      "A22": [
+        -2000.0,
+        2000.0
+      ],
+      "B22": [
+        -2000.0,
+        2000.0
+      ]
+    },
+    "source": "<DATA_ROOT>",
+    "_policy": "a deliberately conservative deployment envelope inside the scanner's real capability; expected to bind, and binding is the policy being enforced"
+  },
+  "provenance": {
+    "git_commit": null,
+    "git_note": "the repository has no commits yet, so there is no commit to record; SHA-256 of each file's bytes is given instead",
+    "file_sha256": {
+      "core/pfc_guarded_joint.py": "684c7f2df44c42fffa8c589ae99e27301f60719d1963e226f63320b37f473ca3",
+      "core/controllability_audit.py": "8c122337aa79d005fd2e60d45b425c95446e7e539aa06f0de7cae845140361ab",
+      "core/subject_split.py": "8aa91b6279acd60c069f2dea5bc2c1e8e1c2eb7d1fb6ce1e278ce74e2749dacb",
+      "core/shim_metrics.py": "fb588bc8198db96c608e81c3af9a8a21ffa09558058ab16a24328259966a29d6",
+      "core/shim_state.py": "3cae87490ceaaef0d4c2b425a0f7073c74c66512b16c66250ddd18858ab9be2a",
+      "core/adaptive_joint.py": "ed1c58416a4261f1f4602ea49e1dc010833ad42673acefdd69511ee0871f34d6",
+      "core/hybrid_shim.py": "53c6ccbbf1c8976f588b1eced2ae7fc89019555d3c5b9966d5bfff9920145370",
+      "config/shim_delta_bounds.json": "eddc16eeabcb064a7936d4185a468395c154b31ef55cfde9c72724612275990b",
+      "tools/research/run_pfc_guarded_pareto.py": "8aa9799ef99db8b58acdae5c985d0310bbdc7b3885ce24aed786352cb06b2af9",
+      "tools/research/run_controllability_audit.py": "031e3498eba84a6dacbc43b607c17ed9b89b4be5c884eaf921455dbbfe2e9417",
+      "tools/research/freeze_route2.py": "a4c4272157fb9a84f90e312439f34b5b5a750ab4ea78ed640900b4ff112319be"
+    },
+    "python": "3.11.9",
+    "numpy": "2.2.6",
+    "moved_paths": {
+      "tests/run_pfc_guarded_pareto.py": "tools/research/run_pfc_guarded_pareto.py",
+      "tests/run_controllability_audit.py": "tools/research/run_controllability_audit.py",
+      "tests/freeze_route2.py": "tools/research/freeze_route2.py"
+    },
+    "cleanup_note": "path-only repository cleanup; numerical definitions and results unchanged. Scripts moved from tests/ to tools/research/ and the recorded SHA-256 updated to the moved files."
+  },
+  "metrics": {
+    "shared_f0": "one centre frequency for the whole head, equal to the negated in-brain mean of the residual, built into the design by centring every column on its in-brain mean; PFC and rest are never demeaned separately",
+    "primary": {
+      "name": "pfc_rms",
+      "definition": "root mean square of the residual over the PFC mask after the shared f0, in Hz"
+    },
+    "constraint": {
+      "name": "rest_rms",
+      "definition": "same quantity over brain & ~pfc; capped at (1 + budget) x the reference solution's value"
+    },
+    "secondary": [
+      "brain_rms",
+      "pfc_p95",
+      "pfc_p99",
+      "pfc_worst10",
+      "pfc_mean",
+      "rest_mean",
+      "mean_diff",
+      "f0_hz"
+    ],
+    "reported_but_not_optimised": [
+      "pfc_std",
+      "rest_std"
+    ],
+    "_std_note": "region-centred standard deviations demean each region separately and hide a genuine frequency offset between them; kept only for comparison with figures produced before the shared f0 was settled",
+    "all_metric_keys": [
+      "f0_hz",
+      "pfc_rms",
+      "rest_rms",
+      "brain_rms",
+      "pfc_mean",
+      "rest_mean",
+      "mean_diff",
+      "pfc_p95",
+      "pfc_p99",
+      "pfc_worst10",
+      "pfc_std",
+      "rest_std"
+    ]
+  }
+}

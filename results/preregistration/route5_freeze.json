@@ -1,0 +1,160 @@
+{
+  "_what": "Route 5 pre-registration. Frozen before the test fold is run.",
+  "_status": "research candidate; not wired into the UI, does not change any app default",
+  "_qualifier": "Pareto optimality applies only to regional MSE/RMS under the identical feasible set; it does not imply Pareto optimality for CVaR, EPI displacement, signal dropout, or measured EPI image quality.",
+  "_not_an_epi_metric": "CVaR of the field is a property of the field, not an EPI image metric. Nothing in route 5 measures displacement, signal dropout, or image quality, and no claim about them is supported by it.",
+  "operating_point": {
+    "beta": 0.9,
+    "beta_meaning": "mean of the worst 10% of |PFC residual|, the same quantity reported as pfc_worst10",
+    "primary_candidate_rest_budget": 0.0,
+    "budget_meaning": "rest RMS held at the production whole-brain solution's level exactly; the tail improvement is not bought from the rest of the brain",
+    "secondary_budget_reported": 0.01,
+    "chosen_on": [
+      "train",
+      "validation"
+    ],
+    "test_run": false
+  },
+  "solver": {
+    "form": "Rockafellar-Uryasev exact LP: min t + sum(u)/((1-beta)n) s.t. u >= 0, u >= +(Ax+b) - t, u >= -(Ax+b) - t. No smoothing and no surrogate objective.",
+    "backend": [
+      "CLARABEL",
+      "SCS (fallback)"
+    ],
+    "voxels": "full PFC mask",
+    "subsampling": false,
+    "max_voxels": 0,
+    "_voxel_note": "a tail measure depends on which voxels are extreme, not only on second moments, so it cannot be reduced to a 20x20 normal form the way the mean-square objectives are; the full PFC design matrix reaches the solver. The rest constraint stays factored.",
+    "rest_constraint": "second-order cone on the factored rest design",
+    "post_solve_clipping": false,
+    "_clipping_note": "a solution violating the guard or the box raises GuardViolation; it is never clipped",
+    "tolerances_hz": {
+      "guard_tol": 0.001,
+      "box_tol": 1e-06
+    }
+  },
+  "metrics": {
+    "primary": {
+      "name": "pfc_cvar",
+      "definition": "CVaR_0.90 of |PFC residual| after the shared f0, in Hz; identical to pfc_worst10",
+      "computed_by": "sorting the residual, not read from the solver's t, so the reported number does not depend on convergence"
+    },
+    "constraint": {
+      "name": "rest_rms",
+      "definition": "RMS over brain & ~pfc after the shared f0, capped at the production solution's value"
+    },
+    "secondary": [
+      "pfc_rms",
+      "pfc_p95",
+      "pfc_p99",
+      "pfc_mean",
+      "rest_mean",
+      "mean_diff",
+      "brain_rms",
+      "f0_hz",
+      "current_max",
+      "at_limit",
+      "scanner_margin",
+      "scanner_max_abs"
+    ]
+  },
+  "measured_on_train_validation": {
+    "pfc_rms_cost_hz": 1.4544,
+    "pfc_cvar_gain_hz": 2.2796,
+    "pfc_p99_gain_hz": 4.6204,
+    "n_subjects": 30,
+    "tail_improved_on": 30,
+    "_note": "read back from results/route5_cvar/cvar.csv at freeze time, not retyped",
+    "pfc_rms_cost_hz_median_stated": 1.45
+  },
+  "masks": {
+    "brain": "*_bet_mask.nii.gz > 0.5",
+    "pfc": "*_pfc_mask.nii.gz, else roi_cache/pfc_native.nii.gz, > 0.5, intersected with brain",
+    "rest": "brain & ~pfc, strictly disjoint; air excluded"
+  },
+  "split": {
+    "seed": 20260805,
+    "grouping": "by participant",
+    "folds_run": [
+      "train",
+      "validation"
+    ],
+    "counts": {
+      "train": 20,
+      "validation": 10,
+      "test": 10
+    }
+  },
+  "bounds": {
+    "coil": "PFC 12ch",
+    "current_limit_a": 3.0,
+    "delta_envelope": 2000.0,
+    "absolute_envelope": 2000.0,
+    "window_used": {
+      "A10": [
+        -2000.0,
+        2000.0
+      ],
+      "A11": [
+        -2000.0,
+        2000.0
+      ],
+      "B11": [
+        -2000.0,
+        2000.0
+      ],
+      "A20": [
+        -2000.0,
+        2000.0
+      ],
+      "A21": [
+        -2000.0,
+        2000.0
+      ],
+      "B21": [
+        -2000.0,
+        2000.0
+      ],
+      "A22": [
+        -2000.0,
+        2000.0
+      ],
+      "B22": [
+        -2000.0,
+        2000.0
+      ]
+    },
+    "source": "<DATA_ROOT>"
+  },
+  "provenance": {
+    "git_commit": null,
+    "git_note": "no commits in the repository; SHA-256 of each file's bytes recorded instead",
+    "file_sha256": {
+      "core/pfc_guarded_joint.py": "684c7f2df44c42fffa8c589ae99e27301f60719d1963e226f63320b37f473ca3",
+      "core/controllability_audit.py": "8c122337aa79d005fd2e60d45b425c95446e7e539aa06f0de7cae845140361ab",
+      "core/subject_split.py": "8aa91b6279acd60c069f2dea5bc2c1e8e1c2eb7d1fb6ce1e278ce74e2749dacb",
+      "core/shim_metrics.py": "fb588bc8198db96c608e81c3af9a8a21ffa09558058ab16a24328259966a29d6",
+      "core/shim_state.py": "3cae87490ceaaef0d4c2b425a0f7073c74c66512b16c66250ddd18858ab9be2a",
+      "core/adaptive_joint.py": "ed1c58416a4261f1f4602ea49e1dc010833ad42673acefdd69511ee0871f34d6",
+      "core/hybrid_shim.py": "53c6ccbbf1c8976f588b1eced2ae7fc89019555d3c5b9966d5bfff9920145370",
+      "config/shim_delta_bounds.json": "eddc16eeabcb064a7936d4185a468395c154b31ef55cfde9c72724612275990b",
+      "tools/research/run_pfc_guarded_pareto.py": "8aa9799ef99db8b58acdae5c985d0310bbdc7b3885ce24aed786352cb06b2af9",
+      "tools/research/run_controllability_audit.py": "031e3498eba84a6dacbc43b607c17ed9b89b4be5c884eaf921455dbbfe2e9417",
+      "tools/research/freeze_route2.py": "a4c4272157fb9a84f90e312439f34b5b5a750ab4ea78ed640900b4ff112319be",
+      "core/cvar_shim.py": "b056759e73330b8f3e4e02d9c68698a30b03ccd627b136521e9d8085bed2b1a0",
+      "tools/research/run_cvar_shim.py": "0d9e0eb6f272131a52f9b5a97eb7a8b89ed26904e88bdc6790b1b9e5d0ab2030",
+      "tools/research/freeze_route5.py": "c3325db16389dbacd355ee5f4b63a703a764753eb9c98d7a92a083267b775119"
+    },
+    "python": "3.11.9",
+    "numpy": "2.2.6",
+    "default_beta_in_code": 0.9,
+    "moved_paths": {
+      "tests/run_pfc_guarded_pareto.py": "tools/research/run_pfc_guarded_pareto.py",
+      "tests/run_controllability_audit.py": "tools/research/run_controllability_audit.py",
+      "tests/freeze_route2.py": "tools/research/freeze_route2.py",
+      "tests/run_cvar_shim.py": "tools/research/run_cvar_shim.py",
+      "tests/freeze_route5.py": "tools/research/freeze_route5.py"
+    },
+    "cleanup_note": "path-only repository cleanup; numerical definitions and results unchanged. Scripts moved from tests/ to tools/research/ and the recorded SHA-256 updated to the moved files."
+  }
+}

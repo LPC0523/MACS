@@ -1,0 +1,12 @@
+{
+  "name": "Infant 36ch",
+  "description": "3T infant head AC/DC array (RF + shim), 36 channels",
+  "channel_count": 36,
+  "fieldmap_dir": "coils/infant_36ch",
+  "current_limit_a": 3.0,
+  "default": false,
+  "field_unit": "Hz/A",
+  "field_unit_status": "user_confirmed",
+  "field_unit_note": "The user confirmed on 2026-10-26 that these 36 field maps are in Hz/A. The confirmation applies to this config and these maps only.",
+  "field_unit_confirmed_date": "2026-10-26"
+}

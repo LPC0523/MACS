@@ -1,0 +1,11 @@
+{
+  "name": "SF 12ch",
+  "description": "Surface coil array 2025-12-04 calibration, 12 channels",
+  "channel_count": 12,
+  "fieldmap_dir": "coils/sf_12ch",
+  "current_limit_a": 3.0,
+  "default": false,
+  "field_unit": "Hz/A",
+  "field_unit_status": "unconfirmed",
+  "field_unit_note": "单位未经确认。上一轮曾被一个遍历 config/coils/*.json 的脚本连带盖上 user_confirmed，但用户只对 PFC 12ch 的场图做过确认——按通道数或名称相似继承单位确认正是要避免的事，故改回 unconfirmed。取得该阵列自身的标定依据后再改。"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "PFC 12ch",
+  "description": "Prefrontal surface coil array, 12 channels",
+  "channel_count": 12,
+  "fieldmap_dir": "coils/pfc_12ch",
+  "current_limit_a": 3.0,
+  "default": true,
+  "field_unit": "Hz/A",
+  "field_unit_status": "user_confirmed",
+  "field_unit_confirmed_date": "2026-08-11",
+  "field_unit_note": "用户于 2026-08-11 明确确认该阵列场图按 Hz/A 解释。NIfTI 元数据未机器可读地记录单位，故确认写在此处，且仅适用于本配置指向的场图。"
+}
